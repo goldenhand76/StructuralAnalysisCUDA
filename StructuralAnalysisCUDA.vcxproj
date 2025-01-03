@@ -116,6 +116,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <OpenMPSupport>true</OpenMPSupport>
+      <AdditionalOptions>-openmp:llvm %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -145,7 +146,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cuda_kernel.cuh" />
-    <ClInclude Include="DelaunayTriangulation.cuh" />
+    <ClInclude Include="DelaunayTriangulation_kernel.cuh" />
     <ClInclude Include="DelaunayTriangulation.h" />
     <ClInclude Include="PointGenerator.cuh" />
     <ClInclude Include="PointGenerator.h" />
@@ -153,7 +154,7 @@
   <ItemGroup>
     <CudaCompile Include="cuda_kernel.cu" />
     <CudaCompile Include="DelaunayTriangulation.cpp" />
-    <CudaCompile Include="DelaunayTriangulation.cu" />
+    <CudaCompile Include="DelaunayTriangulation_kernel.cu" />
     <CudaCompile Include="PointGenerator.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

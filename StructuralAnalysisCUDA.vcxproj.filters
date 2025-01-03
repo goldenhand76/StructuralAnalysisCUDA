@@ -29,7 +29,7 @@
     <ClInclude Include="DelaunayTriangulation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DelaunayTriangulation.cuh">
+    <ClInclude Include="DelaunayTriangulation_kernel.cuh">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="PointGenerator.cuh">
@@ -46,7 +46,7 @@
     <CudaCompile Include="DelaunayTriangulation.cpp">
       <Filter>Source Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="DelaunayTriangulation.cu">
+    <CudaCompile Include="DelaunayTriangulation_kernel.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
     <CudaCompile Include="PointGenerator.cu">

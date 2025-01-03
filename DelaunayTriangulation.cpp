@@ -1,4 +1,6 @@
 #include "DelaunayTriangulation.h"
+#include "./DelaunayTriangulation_kernel.cuh"
+
 #include <omp.h>  // Include OpenMP header
 #include <algorithm>
 #include <cmath>
@@ -58,39 +60,50 @@ void Graph::addPoint(const Point& point) {
 }
 
 
-void Graph::triangulation(int rank, int size) {
+void Graph::triangulation(float* apoints, int rank, int size) {
     std::vector<Triangle> localTriangles;
 
-    // Split work dynamically among processes
+    // Split work dynamically among processes (MPI)
     size_t numPoints = points.size();
     size_t pointsPerRank = numPoints / size;
     size_t remainder = numPoints % size;
     size_t start = rank * pointsPerRank;
     size_t end = start + pointsPerRank + (rank < remainder ? 1 : 0);
 
+    // CUDA-based triangulation (assumed to be already parallelized on the GPU)
+    std::vector<std::vector<int>> trianglesCUDA;
+    triangulationCUDA(apoints, numPoints, trianglesCUDA);
+
+    std::cout << "#Triangles generated with GPU: " << trianglesCUDA.size() << "\n";
     printf("Rank : %d ---------- Processing points from id : %d to id : %d\n", rank, start, end);
 
-    // Local computation of triangles
-    for (size_t i = start; i < end; ++i) {
-        std::vector<Triangle> tempTriangles;
-#pragma omp parallel for shared(tempTriangles)
-        for (size_t j = 0; j < numPoints; ++j) {
-            if (j <= i) continue;  // Avoid duplicate pairs
-            for (size_t k = 0; k < numPoints; ++k) {
-                if (k <= j) continue;  // Avoid duplicate triplets
-                if (!areCollinear(points[i], points[j], points[k])) {
-                    Triangle tri(points[i], points[j], points[k]);
-                    if (triangleIsDelaunay(tri)) {
-#pragma omp critical
-                        localTriangles.push_back(tri);
+    // Parallelized local computation of triangles using OpenMP
+#pragma omp parallel
+    {
+        // Thread-local storage to minimize contention
+        std::vector<Triangle> threadLocalTriangles;
+
+        // Distribute outermost loop iterations across threads
+#pragma omp for schedule(dynamic)
+        for (size_t i = start; i < end; ++i) {
+            for (size_t j = i + 1; j < numPoints; ++j) {
+                for (size_t k = j + 1; k < numPoints; ++k) {
+                    if (!areCollinear(points[i], points[j], points[k])) {
+                        Triangle tri(points[i], points[j], points[k]);
+                        if (triangleIsDelaunay(tri)) {
+                            threadLocalTriangles.push_back(tri);
+                        }
                     }
                 }
             }
         }
-        triangles = tempTriangles;  // Assign the calculated triangles
+
+        // Merge thread-local results into shared localTriangles
+#pragma omp critical
+        localTriangles.insert(localTriangles.end(), threadLocalTriangles.begin(), threadLocalTriangles.end());
     }
 
-    // Serialize local triangles for communication
+    // Serialize local triangles for communication (MPI)
     size_t localCount = localTriangles.size();
     std::vector<double> serializedLocalData(localCount * 6);  // 3 points * 2 coordinates each
     for (size_t i = 0; i < localCount; ++i) {
@@ -102,7 +115,7 @@ void Graph::triangulation(int rank, int size) {
         serializedLocalData[i * 6 + 5] = localTriangles[i].c.y;
     }
 
-    // Gather all local data sizes at root
+    // Gather all local data sizes at root using MPI
     std::vector<int> recvCounts(size), displs(size);
     int localDataSize = localCount * 6;
     MPI_Gather(&localDataSize, 1, MPI_INT, recvCounts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -123,11 +136,11 @@ void Graph::triangulation(int rank, int size) {
         allData.resize(totalSize);
     }
 
-    // Gather all triangles at root
+    // Gather all triangles at root using MPI
     MPI_Gatherv(serializedLocalData.data(), localDataSize, MPI_DOUBLE,
         allData.data(), recvCounts.data(), displs.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    // Deserialize triangles at root
+    // Deserialize triangles at root (MPI root process)
     if (rank == 0) {
         triangles.clear();
         for (size_t i = 0; i < allData.size(); i += 6) {
@@ -137,7 +150,6 @@ void Graph::triangulation(int rank, int size) {
             triangles.emplace_back(p1, p2, p3);
         }
     }
-
 }
 
 

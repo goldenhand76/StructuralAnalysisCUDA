@@ -1,11 +1,40 @@
 #include <iostream>
-#include "./cuda_kernel.cuh"
+#include <cuda_runtime.h>
 #include "omp.h"
 #include "mpi.h"
-#include <cuda_runtime.h>
-#include "./PointGenerator.cuh"
 
-#define NUM_THREADS 5
+#include "DelaunayTriangulation.h"
+
+#define NUM_THREADS 12
+
+
+float* generatePointsWithHole(Graph& graph, float squareSize, float holeSize) {
+    // Define the boundaries of the hole
+    float halfSquare = squareSize / 2;
+    float halfHole = holeSize / 2;
+    float holeMinX = halfSquare - halfHole;
+    float holeMaxX = halfSquare + halfHole;
+    float holeMinY = halfSquare - halfHole;
+    float holeMaxY = halfSquare + halfHole;
+
+    for (float i = 0; i <= squareSize; ++i) {
+        for (float j = 0; j <= squareSize; ++j) {
+            // Check if the point is outside the hole boundaries
+            if (!(i >= holeMinX && i <= holeMaxX && j >= holeMinY && j <= holeMaxY)) {
+                graph.addPoint(Point(i, j));
+            }
+        }
+    }
+
+    float* points = new float[graph.points.size() * 2]; // Each point has x and y
+
+    for (int i = 0; i < graph.points.size(); i++) {
+        points[i * 2] = graph.points[i].x;
+        points[i * 2 + 1] = graph.points[i].y;
+    }
+
+    return points;
+}
 
 void printMPIProperties(int size);
 void printDeviceProperties(int deviceCount);
@@ -13,6 +42,7 @@ void printDeviceProperties(int deviceCount);
 int main(int argc, char** argv)
 {
     omp_set_num_threads(NUM_THREADS);
+
     MPI_Init(&argc, &argv);
 
     int rank, size;
@@ -29,27 +59,16 @@ int main(int argc, char** argv)
     std::cout << "\nNumber of CUDA devices: " << deviceCount << "\n" << std::endl;
     printDeviceProperties(deviceCount);
 
-    // Initialize arrays A, B, and C.
-    double A[3], B[3], C[3];
+    Graph graph;
+    std::vector<Point> points;
 
-    // Populate arrays A and B.
-    A[0] = 5; A[1] = 8; A[2] = 3;
-    B[0] = 7; B[1] = 6; B[2] = 4;
+    float* apoints = generatePointsWithHole(graph, 20, 5);
+    std::cout << "\nNumber of generated points: " << graph.points.size() << "\n" << std::endl;
 
-    // Sum array elements across ( C[0] = A[0] + B[0] ) into array C using CUDA.
-    kernel(A, B, C, 3);
+    graph.triangulation(apoints, rank, size);
 
-    // Print out result.
-    std::cout << "C = " << C[0] << ", " << C[1] << ", " << C[2] << std::endl;
-
-    float hostPoints[400];
-    float hostFlags[400];
-    generateOrderedPointsWithHole(hostPoints, hostFlags, 20, 5);
-
-    for (int i = 0; i < 400; i++) {
-        std::cout << "Point = " << hostPoints[i] << std::endl;
-    }
-
+    std::cout << "#Triangles generated with CPU: " << graph.triangles.size() << "\n";
+    //graph.printTriangles();
 
     MPI_Finalize();
 }

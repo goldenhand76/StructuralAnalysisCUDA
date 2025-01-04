@@ -104,15 +104,9 @@ void triangulationCUDA(float* points, int numPoints, int start, int end, std::ve
     int maxThreadsPerLaunch = 67108864;  // Adjust based on your GPU ( thread size = (1024, 1024, 64) )
     int launches = (totalThreads + maxThreadsPerLaunch - 1) / maxThreadsPerLaunch;
 
-    for (int l = 0; l < launches; ++l) {
-        int startIdx = l * maxThreadsPerLaunch;
-        int endIdx = (startIdx + maxThreadsPerLaunch <= totalThreads) ? startIdx + maxThreadsPerLaunch : totalThreads;
-        int currentThreads = endIdx - startIdx;
 
-        int currentBlocks = (currentThreads + blockSize - 1) / blockSize;
-        triangulationKernel << <currentBlocks, blockSize >> > (d_points, numPoints, start, end, d_triangles, d_numTriangles, maxTriangles);
-        cudaDeviceSynchronize();
-    }
+    triangulationKernel << <numBlocks, blockSize >> > (d_points, numPoints, start, end, d_triangles, d_numTriangles, maxTriangles);
+
 
     // Copy results back to host
     cudaMemcpy(&h_numTriangles, d_numTriangles, sizeof(int), cudaMemcpyDeviceToHost);

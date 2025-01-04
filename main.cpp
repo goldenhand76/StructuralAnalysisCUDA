@@ -66,7 +66,7 @@ int main(int argc, char** argv)
     Graph graph;
     std::vector<Point> points;
 
-    float* apoints = generatePointsWithHole(graph, 20, 5);
+    float* apoints = generatePointsWithHole(graph, 30, 5);
     std::cout << "\nNumber of generated points: " << graph.points.size() << "\n" << std::endl;
 
     graph.triangulation(apoints, rank, size, smSize);

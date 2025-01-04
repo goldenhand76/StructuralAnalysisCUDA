@@ -41,7 +41,7 @@ public:
 
     int getNodeIndex(const Point& point) const;
     void addPoint(const Point& point);
-    void triangulation(float* apoints, int rank, int size);
+    void triangulation(float* apoints, int rank, int size, int smSize);
     void triangulationWithLocalStorage(int rank, int size);
     void triangulationWithTaskPool();
     void triangulationWithDomainDecomposition(int numDomains);

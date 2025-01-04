@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include "omp.h"
 #include "mpi.h"
+#include "chrono"
 
 #include "DelaunayTriangulation.h"
 
@@ -58,6 +59,9 @@ int main(int argc, char** argv)
 
     std::cout << "\nNumber of CUDA devices: " << deviceCount << "\n" << std::endl;
     printDeviceProperties(deviceCount);
+    int smSize = 24;
+
+    auto start = std::chrono::high_resolution_clock::now(); // Start timing
 
     Graph graph;
     std::vector<Point> points;
@@ -65,10 +69,16 @@ int main(int argc, char** argv)
     float* apoints = generatePointsWithHole(graph, 20, 5);
     std::cout << "\nNumber of generated points: " << graph.points.size() << "\n" << std::endl;
 
-    graph.triangulation(apoints, rank, size);
+    graph.triangulation(apoints, rank, size, smSize);
+    std::cout << "#Triangles generated with ALL CPUs: " << graph.triangles.size() << "\n";
 
-    std::cout << "#Triangles generated with CPU: " << graph.triangles.size() << "\n";
-    //graph.printTriangles();
+    auto phase1_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> phase1_duration = phase1_end - start;
+    std::cout << "Time taken for Phase 1 (Generating triangles): " << phase1_duration.count() << " seconds." << std::endl;
+
+    if (rank == 0) {
+        graph.printTriangles();
+    }
 
     MPI_Finalize();
 }
@@ -90,6 +100,7 @@ void printMPIProperties(int size) {
 }
 
 void printDeviceProperties(int deviceCount) {
+
     for (int device = 0; device < deviceCount; ++device) {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, device);
@@ -119,5 +130,4 @@ void printDeviceProperties(int deviceCount) {
                   << " GB/s" << std::endl;
         std::cout << std::endl;
     }
-
 }

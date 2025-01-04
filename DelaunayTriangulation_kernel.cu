@@ -12,8 +12,9 @@ __device__ bool areCollinearKernel(float ax, float ay, float bx, float by, float
 __device__ bool pointInCircleKernel(float px, float py, float* circle) {
     float dx = px - circle[0];
     float dy = py - circle[1];
-    float distance = sqrt(dx * dx + dy * dy);
-    return distance < circle[2];
+    float distanceSq = dx * dx + dy * dy;
+    float radiusSq = circle[2] * circle[2];
+    return distanceSq < radiusSq;
 }
 
 // Kernel to compute circumcircle of a triangle
@@ -41,7 +42,7 @@ __device__ bool triangleIsDelaunayKernel(float ax, float ay, float bx, float by,
 }
 
 // CUDA Kernel to perform triangulation
-__global__ void triangulationKernel(float* points, int numPoints, int* triangles, int* numTriangles) {
+__global__ void triangulationKernel(float* points, int numPoints, int start, int end, int* triangles, int* numTriangles, long long maxTriangles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     // Each thread processes a unique triangle
@@ -50,6 +51,7 @@ __global__ void triangulationKernel(float* points, int numPoints, int* triangles
     int k = idx % numPoints;
 
     if (i >= numPoints || j >= numPoints || k >= numPoints || j <= i || k <= j) return;
+    if (i < start || i > end) return;
 
     float ax = points[2 * i];
     float ay = points[2 * i + 1];
@@ -61,6 +63,12 @@ __global__ void triangulationKernel(float* points, int numPoints, int* triangles
     if (!areCollinearKernel(ax, ay, bx, by, cx, cy)) {
         if (triangleIsDelaunayKernel(ax, ay, bx, by, cx, cy, points, numPoints)) {
             int triangleIdx = atomicAdd(numTriangles, 1);
+
+            if (triangleIdx >= maxTriangles) {
+                printf("Error: triangleIdx %d exceeds maxTriangles %d\n", triangleIdx, maxTriangles);
+                return;
+            }
+
             triangles[3 * triangleIdx] = i;
             triangles[3 * triangleIdx + 1] = j;
             triangles[3 * triangleIdx + 2] = k;
@@ -69,8 +77,12 @@ __global__ void triangulationKernel(float* points, int numPoints, int* triangles
 }
 
 // Host function to call the kernel
-void triangulationCUDA(float* points, int numPoints, std::vector<std::vector<int>>& triangles) {
-    int maxTriangles = numPoints * (numPoints - 1) * (numPoints - 2) / 6;
+void triangulationCUDA(float* points, int numPoints, int start, int end, std::vector<std::vector<int>>& triangles) {
+    long long maxTriangles = (long long)numPoints * (numPoints - 1) * (numPoints - 2) / 6;
+    if (maxTriangles < 0) {
+        printf("Error: Overflow detected in maxTriangles calculation\n");
+        return;
+    }
 
     // Allocate device memory
     float* d_points;
@@ -86,11 +98,21 @@ void triangulationCUDA(float* points, int numPoints, std::vector<std::vector<int
     cudaMemcpy(d_numTriangles, &h_numTriangles, sizeof(int), cudaMemcpyHostToDevice);
 
     // Launch kernel
-    int totalThreads = numPoints * numPoints * numPoints;
+    long long totalThreads = (long long)numPoints * numPoints * numPoints;
     int blockSize = 256;
     int numBlocks = (totalThreads + blockSize - 1) / blockSize;
+    int maxThreadsPerLaunch = 67108864;  // Adjust based on your GPU ( thread size = (1024, 1024, 64) )
+    int launches = (totalThreads + maxThreadsPerLaunch - 1) / maxThreadsPerLaunch;
 
-    triangulationKernel << <numBlocks, blockSize >> > (d_points, numPoints, d_triangles, d_numTriangles);
+    for (int l = 0; l < launches; ++l) {
+        int startIdx = l * maxThreadsPerLaunch;
+        int endIdx = (startIdx + maxThreadsPerLaunch <= totalThreads) ? startIdx + maxThreadsPerLaunch : totalThreads;
+        int currentThreads = endIdx - startIdx;
+
+        int currentBlocks = (currentThreads + blockSize - 1) / blockSize;
+        triangulationKernel << <currentBlocks, blockSize >> > (d_points, numPoints, start, end, d_triangles, d_numTriangles, maxTriangles);
+        cudaDeviceSynchronize();
+    }
 
     // Copy results back to host
     cudaMemcpy(&h_numTriangles, d_numTriangles, sizeof(int), cudaMemcpyDeviceToHost);

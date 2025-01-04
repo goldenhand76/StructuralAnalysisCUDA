@@ -60,48 +60,71 @@ void Graph::addPoint(const Point& point) {
 }
 
 
-void Graph::triangulation(float* apoints, int rank, int size) {
+void Graph::triangulation(float* apoints, int rank, int size, int smSize) {
     std::vector<Triangle> localTriangles;
 
     // Split work dynamically among processes (MPI)
+    size_t start, end;
     size_t numPoints = points.size();
-    size_t pointsPerRank = numPoints / size;
-    size_t remainder = numPoints % size;
-    size_t start = rank * pointsPerRank;
-    size_t end = start + pointsPerRank + (rank < remainder ? 1 : 0);
+    size_t pointsPerRank = numPoints / (size + smSize);
+    size_t remainder = numPoints % (size + smSize);
 
-    // CUDA-based triangulation (assumed to be already parallelized on the GPU)
-    std::vector<std::vector<int>> trianglesCUDA;
-    triangulationCUDA(apoints, numPoints, trianglesCUDA);
+    if (rank == 0) {
+        start = rank * pointsPerRank;
+        end = start + ((smSize + 1) * pointsPerRank);
+    }
+    else {
+        start = ((smSize + rank) * pointsPerRank);
+        end = start + pointsPerRank;
+    }
+    if (size - 1 == rank) {
+        end += remainder;
+    }
 
-    std::cout << "#Triangles generated with GPU: " << trianglesCUDA.size() << "\n";
-    printf("Rank : %d ---------- Processing points from id : %d to id : %d\n", rank, start, end);
 
-    // Parallelized local computation of triangles using OpenMP
-#pragma omp parallel
-    {
-        // Thread-local storage to minimize contention
-        std::vector<Triangle> threadLocalTriangles;
+    if (rank == 0) {
 
-        // Distribute outermost loop iterations across threads
-#pragma omp for schedule(dynamic)
-        for (size_t i = start; i < end; ++i) {
-            for (size_t j = i + 1; j < numPoints; ++j) {
-                for (size_t k = j + 1; k < numPoints; ++k) {
-                    if (!areCollinear(points[i], points[j], points[k])) {
-                        Triangle tri(points[i], points[j], points[k]);
-                        if (triangleIsDelaunay(tri)) {
-                            threadLocalTriangles.push_back(tri);
+        printf("Rank : %d ---------- GPU - Processing points from id : %d to id : %d\n", rank, start, end);
+
+        std::vector<std::vector<int>> trianglesCUDA;
+        triangulationCUDA(apoints, numPoints, start, end, trianglesCUDA);
+        std::cout << "#Triangles generated with GPU: " << trianglesCUDA.size() << "\n";
+        for (const auto& tri : trianglesCUDA) {
+            Triangle t(Point(apoints[tri[0] * 2], apoints[tri[0] * 2 + 1]), 
+                Point(apoints[tri[1] * 2], apoints[tri[1] * 2 + 1]), 
+                Point(apoints[tri[2] * 2], apoints[tri[2] * 2 + 1]));
+            localTriangles.push_back(t);
+        }
+
+    }
+    else {
+
+        printf("Rank : %d ---------- CPU - Processing points from id : %d to id : %d\n", rank, start, end);
+
+        #pragma omp parallel
+        {
+            std::vector<Triangle> threadLocalTriangles;
+
+            #pragma omp for schedule(dynamic)
+            for (size_t i = start; i < end; ++i) {
+                for (size_t j = i + 1; j < numPoints; ++j) {
+                    for (size_t k = j + 1; k < numPoints; ++k) {
+                        if (!areCollinear(points[i], points[j], points[k])) {
+                            Triangle tri(points[i], points[j], points[k]);
+                            if (triangleIsDelaunay(tri)) {
+                                threadLocalTriangles.push_back(tri);
+                            }
                         }
                     }
                 }
             }
-        }
+            #pragma omp critical
+            localTriangles.insert(localTriangles.end(), threadLocalTriangles.begin(), threadLocalTriangles.end());
 
-        // Merge thread-local results into shared localTriangles
-#pragma omp critical
-        localTriangles.insert(localTriangles.end(), threadLocalTriangles.begin(), threadLocalTriangles.end());
+        }
+        printf("#Triangles generated with CPU %d: %d\n", rank, localTriangles.size());
     }
+    
 
     // Serialize local triangles for communication (MPI)
     size_t localCount = localTriangles.size();

@@ -142,20 +142,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="PointGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cuda_kernel.cuh" />
     <ClInclude Include="DelaunayTriangulation_kernel.cuh" />
     <ClInclude Include="DelaunayTriangulation.h" />
-    <ClInclude Include="PointGenerator.cuh" />
-    <ClInclude Include="PointGenerator.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="cuda_kernel.cu" />
     <CudaCompile Include="DelaunayTriangulation.cpp" />
     <CudaCompile Include="DelaunayTriangulation_kernel.cu" />
-    <CudaCompile Include="PointGenerator.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

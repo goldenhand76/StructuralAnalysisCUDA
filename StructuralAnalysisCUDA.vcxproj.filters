@@ -18,38 +18,20 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="PointGenerator.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cuda_kernel.cuh">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="DelaunayTriangulation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DelaunayTriangulation_kernel.cuh">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="PointGenerator.cuh">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PointGenerator.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="cuda_kernel.cu">
-      <Filter>Source Files</Filter>
-    </CudaCompile>
     <CudaCompile Include="DelaunayTriangulation.cpp">
       <Filter>Source Files</Filter>
     </CudaCompile>
     <CudaCompile Include="DelaunayTriangulation_kernel.cu">
-      <Filter>Source Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="PointGenerator.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
   </ItemGroup>

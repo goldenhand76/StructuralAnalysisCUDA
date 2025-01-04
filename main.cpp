@@ -66,7 +66,7 @@ int main(int argc, char** argv)
     Graph graph;
     std::vector<Point> points;
 
-    float* apoints = generatePointsWithHole(graph, 40, 5);
+    float* apoints = generatePointsWithHole(graph, 20, 5);
     std::cout << "\nNumber of generated points: " << graph.points.size() << "\n" << std::endl;
 
     graph.triangulation(apoints, rank, size, smSize);
@@ -77,7 +77,7 @@ int main(int argc, char** argv)
     std::cout << "Time taken for Phase 1 (Generating triangles): " << phase1_duration.count() << " seconds." << std::endl;
 
     if (rank == 0) {
-        graph.printTriangles();
+        //graph.printTriangles();
     }
 
     MPI_Finalize();
